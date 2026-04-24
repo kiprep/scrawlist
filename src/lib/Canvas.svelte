@@ -4,15 +4,25 @@
 	import { DEFAULT_STROKE_OPTIONS } from '$lib/canvas/strokes';
 	import type { Stroke, Point } from '$lib/types';
 
+	type FlattenFn = (type?: string) => Promise<Blob | null>;
+
 	type Props = {
 		strokes: Stroke[];
 		inProgress: Stroke | null;
 		onStrokeStart: (p: Point, pointerType: string) => void;
 		onStrokePoint: (p: Point) => void;
 		onStrokeEnd: () => void;
+		flatten?: FlattenFn;
 	};
 
-	let { strokes, inProgress, onStrokeStart, onStrokePoint, onStrokeEnd }: Props = $props();
+	let {
+		strokes,
+		inProgress,
+		onStrokeStart,
+		onStrokePoint,
+		onStrokeEnd,
+		flatten = $bindable()
+	}: Props = $props();
 
 	let canvas: HTMLCanvasElement | undefined = $state();
 	let container: HTMLDivElement | undefined = $state();
@@ -74,6 +84,30 @@
 		sizeCanvas();
 		const ro = new ResizeObserver(() => sizeCanvas());
 		if (container) ro.observe(container);
+
+		flatten = (type: string = 'image/png') =>
+			new Promise<Blob | null>((resolve) => {
+				if (!canvas) {
+					resolve(null);
+					return;
+				}
+				// Canvas currently has a transparent background. For export, composite
+				// over white so handwriting is legible even if the consumer doesn't
+				// provide its own background.
+				const out = document.createElement('canvas');
+				out.width = canvas.width;
+				out.height = canvas.height;
+				const ctx = out.getContext('2d');
+				if (!ctx) {
+					resolve(null);
+					return;
+				}
+				ctx.fillStyle = '#ffffff';
+				ctx.fillRect(0, 0, out.width, out.height);
+				ctx.drawImage(canvas, 0, 0);
+				out.toBlob((b) => resolve(b), type);
+			});
+
 		return () => ro.disconnect();
 	});
 

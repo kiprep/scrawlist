@@ -1,12 +1,28 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
+	import { apiKey } from '$lib/apiKey.svelte';
+	import { sendToClaude, ClaudeError } from '$lib/claude';
 	import Settings from '$lib/Settings.svelte';
 	import Canvas from '$lib/Canvas.svelte';
-	import type { Point, Stroke } from '$lib/types';
+	import Output from '$lib/Output.svelte';
+	import type { Message, Point, Stroke } from '$lib/types';
 
 	let strokes = $state<Stroke[]>([]);
 	let inProgress = $state<Stroke | null>(null);
 	let nextId = 1;
+
+	let flatten = $state<((type?: string) => Promise<Blob | null>) | undefined>();
+
+	let messages = $state<Message[]>([]);
+	let status = $state<'idle' | 'sending' | 'error' | 'response'>('idle');
+	let responseText = $state('');
+	let errorMsg = $state<string | null>(null);
+	let expanded = $state(false);
+
+	onMount(() => {
+		apiKey.refresh();
+	});
 
 	function onStrokeStart(p: Point, _pointerType: string) {
 		inProgress = { id: nextId++, points: [p], color: '#111', size: 4 };
@@ -35,6 +51,92 @@
 	function clear() {
 		strokes = [];
 		inProgress = null;
+	}
+
+	function blobToBase64(blob: Blob): Promise<string> {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onloadend = () => {
+				const result = reader.result as string;
+				const comma = result.indexOf(',');
+				resolve(comma >= 0 ? result.slice(comma + 1) : result);
+			};
+			reader.onerror = () => reject(reader.error);
+			reader.readAsDataURL(blob);
+		});
+	}
+
+	async function send() {
+		if (!flatten || (strokes.length === 0 && !inProgress)) return;
+		if (status === 'sending') return;
+
+		apiKey.refresh();
+		if (!apiKey.value) {
+			apiKey.requestKey();
+			return;
+		}
+
+		status = 'sending';
+		responseText = '';
+		errorMsg = null;
+		expanded = false;
+
+		let blob: Blob | null = null;
+		try {
+			blob = await flatten('image/png');
+		} catch (e) {
+			errorMsg = e instanceof Error ? e.message : 'Canvas capture failed';
+			status = 'error';
+			return;
+		}
+		if (!blob) {
+			errorMsg = 'Canvas produced no image';
+			status = 'error';
+			return;
+		}
+
+		let base64: string;
+		try {
+			base64 = await blobToBase64(blob);
+		} catch (e) {
+			errorMsg = e instanceof Error ? e.message : 'Failed to encode image';
+			status = 'error';
+			return;
+		}
+
+		const nextMessages: Message[] = [
+			...messages,
+			{
+				role: 'user',
+				content: [
+					{
+						type: 'image',
+						source: { type: 'base64', media_type: 'image/png', data: base64 }
+					}
+				]
+			}
+		];
+
+		try {
+			const reply = await sendToClaude(nextMessages);
+			messages = [...nextMessages, { role: 'assistant', content: reply }];
+			responseText = reply;
+			status = 'response';
+		} catch (e) {
+			if (e instanceof ClaudeError) {
+				errorMsg = e.message;
+				if (e.status === 401) apiKey.requestKey();
+			} else if (e instanceof Error) {
+				errorMsg = `Network error: ${e.message}`;
+			} else {
+				errorMsg = 'Unknown error';
+			}
+			status = 'error';
+		}
+	}
+
+	function toggleExpanded() {
+		expanded = !expanded;
 	}
 </script>
 
@@ -96,6 +198,29 @@
 					<path d="M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14" />
 				</svg>
 			</button>
+			<button
+				type="button"
+				class="tool tool-primary"
+				onclick={send}
+				disabled={strokes.length === 0 || status === 'sending'}
+				aria-label="Send canvas to Claude"
+				title="Send to Claude"
+			>
+				<svg
+					viewBox="0 0 24 24"
+					width="22"
+					height="22"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.8"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true"
+				>
+					<line x1="22" y1="2" x2="11" y2="13" />
+					<polygon points="22 2 15 22 11 13 2 9 22 2" />
+				</svg>
+			</button>
 			<a class="tool" href="{base}/chat" aria-label="Open chat" title="Chat">
 				<svg
 					viewBox="0 0 24 24"
@@ -115,7 +240,22 @@
 		</div>
 	</header>
 
-	<Canvas {strokes} {inProgress} {onStrokeStart} {onStrokePoint} {onStrokeEnd} />
+	<Canvas
+		bind:flatten
+		{strokes}
+		{inProgress}
+		{onStrokeStart}
+		{onStrokePoint}
+		{onStrokeEnd}
+	/>
+
+	<Output
+		{status}
+		text={responseText}
+		error={errorMsg}
+		{expanded}
+		onToggle={toggleExpanded}
+	/>
 </div>
 
 <style>
@@ -123,6 +263,7 @@
 		--bg: #fafaf7;
 		--ink: #1a1a1a;
 		--muted: #777;
+		--accent: #3b6cf6;
 		--border: #e2e2de;
 	}
 	:global(html, body) {
@@ -186,5 +327,12 @@
 	.tool:disabled {
 		opacity: 0.3;
 		cursor: not-allowed;
+	}
+	.tool-primary:not(:disabled) {
+		color: var(--accent);
+	}
+	.tool-primary:not(:disabled):hover,
+	.tool-primary:not(:disabled):focus-visible {
+		background: rgba(59, 108, 246, 0.1);
 	}
 </style>
