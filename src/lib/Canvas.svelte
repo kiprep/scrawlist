@@ -20,6 +20,12 @@
 	let cssHeight = $state(0);
 	let activePointerId: number | null = null;
 
+	// Debug scaffolding — removed once drawing confirmed working on iPad.
+	let dbgDown = $state(0);
+	let dbgMove = $state(0);
+	let dbgUp = $state(0);
+	let dbgLast = $state<{ x: number; y: number; t: string; p: number } | null>(null);
+
 	function sizeCanvas() {
 		if (!canvas || !container) return;
 		const rect = container.getBoundingClientRect();
@@ -63,9 +69,10 @@
 	}
 
 	$effect(() => {
-		strokes;
-		inProgress;
-		inProgress?.points.length;
+		const _strokeCount = strokes.length;
+		const _pointCount = inProgress?.points.length ?? 0;
+		void _strokeCount;
+		void _pointCount;
 		untrack(() => render());
 	});
 
@@ -95,34 +102,49 @@
 	function onPointerDown(e: PointerEvent) {
 		if (e.pointerType === 'touch' && e.isPrimary === false) return;
 		e.preventDefault();
-		canvas?.setPointerCapture(e.pointerId);
 		activePointerId = e.pointerId;
-		onStrokeStart(pointFromEvent(e), e.pointerType);
+		const pt = pointFromEvent(e);
+		dbgDown++;
+		dbgLast = { x: pt.x, y: pt.y, t: e.pointerType, p: pt.pressure };
+		onStrokeStart(pt, e.pointerType);
 	}
 
 	function onPointerMove(e: PointerEvent) {
 		if (activePointerId !== e.pointerId) return;
 		e.preventDefault();
-		onStrokePoint(pointFromEvent(e));
+		const pt = pointFromEvent(e);
+		dbgMove++;
+		dbgLast = { x: pt.x, y: pt.y, t: e.pointerType, p: pt.pressure };
+		onStrokePoint(pt);
 	}
 
 	function onPointerEnd(e: PointerEvent) {
 		if (activePointerId !== e.pointerId) return;
 		activePointerId = null;
-		canvas?.releasePointerCapture(e.pointerId);
+		dbgUp++;
 		onStrokeEnd();
 	}
 </script>
 
-<div class="canvas-container" bind:this={container}>
-	<canvas
-		bind:this={canvas}
-		onpointerdown={onPointerDown}
-		onpointermove={onPointerMove}
-		onpointerup={onPointerEnd}
-		onpointercancel={onPointerEnd}
-		onpointerleave={onPointerEnd}
-	></canvas>
+<div
+	class="canvas-container"
+	bind:this={container}
+	onpointerdown={onPointerDown}
+	onpointermove={onPointerMove}
+	onpointerup={onPointerEnd}
+	onpointercancel={onPointerEnd}
+	onpointerleave={onPointerEnd}
+>
+	<canvas bind:this={canvas}></canvas>
+
+	<div class="debug">
+		down {dbgDown} · move {dbgMove} · up {dbgUp}
+		{#if dbgLast}
+			<br />
+			{dbgLast.t} ({dbgLast.x.toFixed(0)},{dbgLast.y.toFixed(0)}) p={dbgLast.p.toFixed(2)}
+		{/if}
+		<br />strokes {strokes.length}
+	</div>
 </div>
 
 <style>
@@ -137,5 +159,18 @@
 		display: block;
 		touch-action: none;
 		cursor: crosshair;
+	}
+	.debug {
+		position: absolute;
+		top: 0.5rem;
+		left: 0.5rem;
+		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+		font-size: 0.75rem;
+		color: #666;
+		background: rgba(255, 255, 255, 0.7);
+		padding: 0.25rem 0.4rem;
+		border-radius: 4px;
+		pointer-events: none;
+		line-height: 1.3;
 	}
 </style>
