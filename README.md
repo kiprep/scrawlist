@@ -2,7 +2,7 @@
 
 Web app where you write and draw to Claude with Apple Pencil on an iPad, and Claude writes back.
 
-**Status:** v0 — keyboard text input, deploy pipeline bring-up.
+**Status:** v0 — keyboard text input, deploy pipeline bring-up. **Next up:** [v1-dogfood.md](v1-dogfood.md) — bug-report flow that unlocks the Scrawlist → GitHub Issue → Claude Code dogfood loop.
 
 ## Architecture
 
