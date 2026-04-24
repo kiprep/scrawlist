@@ -9,12 +9,7 @@
 	let nextId = 1;
 
 	function onStrokeStart(p: Point, _pointerType: string) {
-		inProgress = {
-			id: nextId++,
-			points: [p],
-			color: '#111',
-			size: 4
-		};
+		inProgress = { id: nextId++, points: [p], color: '#111', size: 4 };
 	}
 
 	function onStrokePoint(p: Point) {
@@ -113,9 +108,7 @@
 					stroke-linejoin="round"
 					aria-hidden="true"
 				>
-					<path
-						d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
-					/>
+					<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
 				</svg>
 			</a>
 			<Settings />

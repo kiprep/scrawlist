@@ -4,26 +4,24 @@ import { getApiKey as readKey, setApiKey as writeKey } from './storage';
  * Shared reactive state for the Anthropic API key and the "enter a key" modal.
  * Consumed by both Settings.svelte (which renders the modal) and any page that
  * needs to prompt for a key (like /chat).
+ *
+ * readKey() returns null during SSR (no localStorage), so initializing directly
+ * at module scope is safe. Callers that want to sync with the client's
+ * localStorage (after hydration) should call refresh() from onMount.
  */
 
-let _key = $state<string | null>(null);
+let _key = $state<string | null>(readKey());
 let _modalOpen = $state(false);
-let _initialized = false;
-
-function ensureInit() {
-	if (_initialized) return;
-	_initialized = true;
-	_key = readKey();
-}
 
 export const apiKey = {
 	get value() {
-		ensureInit();
 		return _key;
 	},
 	get modalOpen() {
-		ensureInit();
 		return _modalOpen;
+	},
+	refresh() {
+		_key = readKey();
 	},
 	requestKey() {
 		_modalOpen = true;

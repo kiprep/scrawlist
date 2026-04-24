@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { maskKey } from '$lib/storage';
 	import { apiKey } from '$lib/apiKey.svelte';
 
@@ -7,6 +8,10 @@
 
 	let showSettings = $state(false);
 	let keyInput = $state('');
+
+	onMount(() => {
+		apiKey.refresh();
+	});
 
 	function openReplace() {
 		showSettings = false;

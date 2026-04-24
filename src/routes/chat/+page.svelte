@@ -13,6 +13,7 @@
 	let conversationEl: HTMLDivElement | undefined = $state();
 
 	onMount(() => {
+		apiKey.refresh();
 		if (!apiKey.value) apiKey.requestKey();
 	});
 
